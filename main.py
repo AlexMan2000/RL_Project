@@ -7,49 +7,24 @@ from value_based import ValueBasedAgent
 from model_based import ModelBasedAgent
 from policy_based import PolicyBasedAgent
 import random
+from config import RLConfig, BoardConfig, RLMethod
+import json
+import os
+from datetime import datetime
 
-class RLMethod(Enum):
-    MODEL_BASED = "model_based"
-    VALUE_BASED = "value_based"
-    POLICY_BASED = "policy_based"
-    
-
-class BoardConfig:
-    def __init__(self, board_size: int = 4, init_board: Optional[np.ndarray] = None):
-        self.board_size = board_size
-        self.init_board = init_board
-
-
-class RLConfig:
-    def __init__(
-        self,
-        method: RLMethod = RLMethod.VALUE_BASED,
-        learning_rate: float = 0.001,
-        gamma: float = 0.99,
-        epsilon: float = 1.0,
-        epsilon_decay: float = 0.995,
-        epsilon_min: float = 0.01,
-        batch_size: int = 64,
-        memory_size: int = 10000,
-        target_update: int = 1000,
-        hidden_dim: int = 128,
-        num_episodes: int = 1000,
-        max_steps: int = 1000,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    ):
-        self.method = method
-        self.learning_rate = learning_rate
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.epsilon_decay = epsilon_decay
-        self.epsilon_min = epsilon_min
-        self.batch_size = batch_size
-        self.memory_size = memory_size
-        self.target_update = target_update
-        self.hidden_dim = hidden_dim
-        self.num_episodes = num_episodes
-        self.max_steps = max_steps
-        self.device = device
+class EnhancedJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, (RLConfig, BoardConfig)):
+            return {k: v for k, v in vars(obj).items()}
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        return super().default(obj)
 
 class Game2048Env(gym.Env):
     def __init__(self, board_size: int = 4, init_board: Optional[np.ndarray] = None):
@@ -186,23 +161,29 @@ def create_env(config: BoardConfig) -> Game2048Env:
     """Create and return the 2048 environment."""
     return Game2048Env(config.board_size, config.init_board)
 
-def create_agent(config: RLConfig):
+def create_agent(rl_config: RLConfig, board_config: BoardConfig):
     """Create and return the appropriate RL agent based on the configuration."""
-    if config.method == RLMethod.MODEL_BASED:
-        return ModelBasedAgent(config)
-    elif config.method == RLMethod.VALUE_BASED:
-        return ValueBasedAgent(config)
-    elif config.method == RLMethod.POLICY_BASED:
-        return PolicyBasedAgent(config)
+    if isinstance(rl_config.method, str):
+        rl_config.method = RLMethod(rl_config.method)
+    
+    if rl_config.method == RLMethod.MODEL_BASED:
+        return ModelBasedAgent(rl_config, board_config)
+    elif rl_config.method == RLMethod.VALUE_BASED:
+        return ValueBasedAgent(rl_config, board_config)
+    elif rl_config.method == RLMethod.POLICY_BASED:
+        return PolicyBasedAgent(rl_config, board_config)
     else:
-        raise ValueError(f"Unknown RL method: {config.method}")
+        raise ValueError(f"Unknown RL method: {rl_config.method}")
 
 def train(
     rl_config: RLConfig,
     board_config: BoardConfig,
     env: Optional[Game2048Env] = None,
     agent: Optional[Any] = None,
-    render: bool = False
+    render: bool = False,
+    save_dir: str = "results",
+    save_every: int = 10,
+    no_save: bool = False
 ) -> Dict[str, Any]:
     """
     Train the RL agent on the 2048 environment.
@@ -212,6 +193,7 @@ def train(
         env: Optional environment instance
         agent: Optional agent instance
         render: Whether to render the environment during training
+        save_dir: Directory to save training results
     
     Returns:
         Dictionary containing training statistics
@@ -219,12 +201,19 @@ def train(
     if env is None:
         env = create_env(board_config)
     if agent is None:
-        agent = create_agent(rl_config)
+        agent = create_agent(rl_config, board_config)
+    
+    # Create save directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
     
     stats = {
         "episode_rewards": [],
         "episode_lengths": [],
-        "best_score": 0
+        "best_score": 0,
+        "config": {
+            "rl_config": rl_config,
+            "board_config": board_config
+        }
     }
     
     for episode in range(rl_config.num_episodes):
@@ -250,44 +239,94 @@ def train(
         stats["episode_lengths"].append(step + 1)
         stats["best_score"] = max(stats["best_score"], episode_reward)
         
-        if episode % 10 == 0:
+        if episode % save_every == 0 and not no_save:
             print(f"Episode {episode}, Reward: {episode_reward}, Best Score: {stats['best_score']}")
+            
+            # Save intermediate results every 10 episodes
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_path = os.path.join(save_dir, f"training_stats_{timestamp}.json")
+            with open(save_path, 'w') as f:
+                json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
+    
+    # Save final results
+    if not no_save:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        final_save_path = os.path.join(save_dir, f"final_training_stats_{timestamp}.json")
+        with open(final_save_path, 'w') as f:
+            json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
+        print(f"Results saved in directory: {save_dir}")
+
     
     return stats
+
+def load_config(config_file: str) -> Dict[str, Any]:
+    """Load configuration from a JSON file."""
+    with open(config_file, 'r') as f:
+        return json.load(f)
 
 def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Train RL agent on 2048 game")
     parser.add_argument("--method", type=str, default="value_based",
-                       choices=["model_based", "value_based", "policy_based"],
+                       choices=[e.value for e in RLMethod],  # Use enum values
                        help="RL method to use")
-    parser.add_argument("--num_episodes", type=int, default=1000,
+    parser.add_argument("--board-size", type=int, default=4,
+                       help="Board size")
+    parser.add_argument("--num-episodes", type=int, default=1000,
                        help="Number of episodes to train")
-    parser.add_argument("--learning_rate", type=float, default=0.001,
+    parser.add_argument("--learning-rate", type=float, default=0.001,
                        help="Learning rate")
     parser.add_argument("--gamma", type=float, default=0.99,
                        help="Discount factor")
     parser.add_argument("--render", action="store_true",
                        help="Render the environment during training")
+    parser.add_argument("--rl-config-file", type=str,
+                       help="Path to RL configuration JSON file")
+    parser.add_argument("--board-config-file", type=str,
+                       help="Path to board configuration JSON file")
+    parser.add_argument("--save-dir", type=str, default="results",
+                       help="Directory to save training results")
+    parser.add_argument("--save-every", type=int, default=10,
+                       help="Save training results every N episodes")
+    parser.add_argument("--no-save", action="store_true",
+                       help="Do not save training results")
     
     args = parser.parse_args()
+
+    # Load configurations from files if provided
+    rl_config_dict = {}
+    board_config_dict = {}
     
+    if args.rl_config_file:
+        rl_config_dict = load_config(args.rl_config_file)
+    else:
+        rl_config_dict = {
+            "method": args.method,  # Pass string directly, will be converted in RLConfig
+            "num_episodes": args.num_episodes,
+            "learning_rate": args.learning_rate,
+            "gamma": args.gamma
+        }
 
-    # Config for RL Algorithm
-    rl_config = RLConfig(
-        method=RLMethod(args.method),
-        num_episodes=args.num_episodes,
-        learning_rate=args.learning_rate,
-        gamma=args.gamma
-    )
+    if args.board_config_file:
+        board_config_dict = load_config(args.board_config_file)
+    else:
+        board_config_dict = {
+            "board_size": args.board_size
+        }
 
-    # Config for Board
-    board_config = BoardConfig(board_size=4)
+    # Create configs
+    rl_config = RLConfig(**rl_config_dict)
+    board_config = BoardConfig(**board_config_dict)
 
-
-    stats = train(rl_config, board_config, render=args.render)
+    stats = train(
+        rl_config, 
+        board_config, 
+        render=args.render, 
+        save_dir=args.save_dir, 
+        save_every=args.save_every, 
+        no_save=args.no_save)
     print(f"Training completed. Best score: {stats['best_score']}")
-
+    
 if __name__ == "__main__":
     main() 
