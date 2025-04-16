@@ -1,13 +1,13 @@
 import gymnasium as gym
 import numpy as np
 import torch
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 from enum import Enum
 from value_based import ValueBasedAgent
 from model_based import ModelBasedAgent
 from policy_based import PolicyBasedAgent
 import random
-from config import RLConfig, BoardConfig, RLMethod
+from config import RLConfig, BoardConfig, RLMethod, ModelConfig
 import json
 import os
 from datetime import datetime
@@ -27,7 +27,11 @@ class EnhancedJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 class Game2048Env(gym.Env):
-    def __init__(self, board_size: int = 4, init_board: Optional[np.ndarray] = None):
+
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+
+
+    def __init__(self, board_size: int = 4, init_board: Optional[np.ndarray] = None, render_mode: str = None):
         super().__init__()
         self.board_size = board_size
         self.action_space = gym.spaces.Discrete(4)  # 0: up, 1: right, 2: down, 3: left
@@ -39,6 +43,17 @@ class Game2048Env(gym.Env):
         else:
             self.board = init_board
         self.reset()
+        self.window = None
+        self.clock = None
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+
+
+    def _get_obs(self):
+        return self.board.copy()
+
+    def _get_info(self):
+        return {}
 
     def _random_init_board(self):
         board = np.zeros((self.board_size, self.board_size), dtype=int)
@@ -178,6 +193,7 @@ def create_agent(rl_config: RLConfig, board_config: BoardConfig):
 def train(
     rl_config: RLConfig,
     board_config: BoardConfig,
+    model_config: Optional[ModelConfig] = None,
     env: Optional[Game2048Env] = None,
     agent: Optional[Any] = None,
     render: bool = False,
@@ -264,12 +280,16 @@ def load_config(config_file: str) -> Dict[str, Any]:
     with open(config_file, 'r') as f:
         return json.load(f)
 
+def create_model_config(config_dict: Dict[str, Any]) -> ModelConfig:
+    """Create ModelConfig from dictionary."""
+    return ModelConfig(**config_dict)
+
 def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Train RL agent on 2048 game")
     parser.add_argument("--method", type=str, default="value_based",
-                       choices=[e.value for e in RLMethod],  # Use enum values
+                       choices=[e.value for e in RLMethod],
                        help="RL method to use")
     parser.add_argument("--board-size", type=int, default=4,
                        help="Board size")
@@ -285,6 +305,8 @@ def main():
                        help="Path to RL configuration JSON file")
     parser.add_argument("--board-config-file", type=str,
                        help="Path to board configuration JSON file")
+    parser.add_argument("--model-config-file", type=str,
+                       help="Path to model architecture configuration JSON file")
     parser.add_argument("--save-dir", type=str, default="results",
                        help="Directory to save training results")
     parser.add_argument("--save-every", type=int, default=10,
@@ -297,12 +319,13 @@ def main():
     # Load configurations from files if provided
     rl_config_dict = {}
     board_config_dict = {}
+    model_config_dict = {}
     
     if args.rl_config_file:
         rl_config_dict = load_config(args.rl_config_file)
     else:
         rl_config_dict = {
-            "method": args.method,  # Pass string directly, will be converted in RLConfig
+            "method": args.method,
             "num_episodes": args.num_episodes,
             "learning_rate": args.learning_rate,
             "gamma": args.gamma
@@ -315,13 +338,20 @@ def main():
             "board_size": args.board_size
         }
 
+    if args.model_config_file:
+        model_config_dict = load_config(args.model_config_file)
+        model_config = create_model_config(model_config_dict)
+    else:
+        model_config = None
+
     # Create configs
     rl_config = RLConfig(**rl_config_dict)
     board_config = BoardConfig(**board_config_dict)
 
     stats = train(
         rl_config, 
-        board_config, 
+        board_config,
+        model_config=model_config,
         render=args.render, 
         save_dir=args.save_dir, 
         save_every=args.save_every, 

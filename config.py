@@ -1,7 +1,8 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, Union, Dict, Any
 import numpy as np
 import torch
+
 
 class RLMethod(Enum):
     MODEL_BASED = "model_based"
@@ -47,3 +48,43 @@ class RLConfig:
         self.num_episodes = num_episodes
         self.max_steps = max_steps
         self.device = device
+
+
+class LayerConfig:
+    def __init__(
+        self,
+        size: int,
+        activation: str = "relu",
+        dropout_rate: float = 0.0,
+        batch_norm: bool = False,
+        layer_norm: bool = False,
+    ):
+        self.size = size
+        self.activation = activation
+        self.dropout_rate = dropout_rate
+        self.batch_norm = batch_norm
+        self.layer_norm = layer_norm
+
+    @property
+    def activation_fn(self) -> torch.nn.Module:
+        """Get the PyTorch activation function."""
+        activations = {
+            "relu": torch.nn.ReLU(),
+            "leaky_relu": torch.nn.LeakyReLU(),
+            "tanh": torch.nn.Tanh(),
+            "sigmoid": torch.nn.Sigmoid(),
+            "elu": torch.nn.ELU(),
+            "gelu": torch.nn.GELU(),
+            "selu": torch.nn.SELU(),
+        }
+        return activations.get(self.activation.lower(), torch.nn.ReLU())
+
+
+class ModelConfig:
+    def __init__(
+        self,
+        layers: List[Dict[str, Any]],  # List of layer configurations
+        initialization: str = "default",
+    ):
+        self.layers = [LayerConfig(**layer_config) for layer_config in layers]
+        self.initialization = initialization
