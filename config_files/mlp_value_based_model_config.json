@@ -1,0 +1,55 @@
+{
+    "q_network": {
+        "layers": [
+            {
+                "size": 128,
+                "activation": "relu",
+                "dropout_rate": 0.1,
+                "batch_norm": true,
+                "layer_norm": false
+            },
+            {
+                "size": 256,
+                "activation": "leaky_relu",
+                "dropout_rate": 0.2,
+                "batch_norm": true,
+                "layer_norm": false
+            },
+            {
+                "size": 128,
+                "activation": "relu",
+                "dropout_rate": 0.1,
+                "batch_norm": true,
+                "layer_norm": false
+            }
+        ],
+        "initialization": "kaiming"
+    },
+    "target_network": {
+        "layers": [
+            {
+                "size": 128,
+                "activation": "relu",
+                "dropout_rate": 0.1,
+                "batch_norm": true,
+                "layer_norm": false
+            },
+            {
+                "size": 256,
+                "activation": "leaky_relu",
+                "dropout_rate": 0.2,
+                "batch_norm": true,
+                "layer_norm": false
+            },
+            {
+                "size": 128,
+                "activation": "relu",
+                "dropout_rate": 0.1,
+                "batch_norm": true,
+                "layer_norm": false
+            }
+        ],
+        "initialization": "kaiming"
+    },
+    "share_config": false
+} 

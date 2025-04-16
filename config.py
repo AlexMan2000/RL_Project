@@ -50,6 +50,16 @@ class RLConfig:
         self.device = device
 
 
+class NetworkConfig:
+    def __init__(
+        self,
+        layers: List[Dict[str, Any]],  # List of layer configurations
+        initialization: str = "default",
+    ):
+        self.layers = [LayerConfig(**layer_config) for layer_config in layers]
+        self.initialization = initialization
+
+
 class LayerConfig:
     def __init__(
         self,
@@ -83,8 +93,49 @@ class LayerConfig:
 class ModelConfig:
     def __init__(
         self,
-        layers: List[Dict[str, Any]],  # List of layer configurations
-        initialization: str = "default",
+        q_network: Optional[Dict[str, Any]] = None,
+        target_network: Optional[Dict[str, Any]] = None,
+        share_config: bool = True
     ):
-        self.layers = [LayerConfig(**layer_config) for layer_config in layers]
-        self.initialization = initialization
+        """
+        Initialize model configuration.
+        
+        Args:
+            q_network: Configuration for Q-network
+            target_network: Configuration for target network
+            share_config: If True and target_network is None, use q_network config for both
+        """
+        self.share_config = share_config
+        self.q_network = NetworkConfig(**q_network) if q_network else None
+        
+        if target_network:
+            self.target_network = NetworkConfig(**target_network)
+            # Validate network architectures are compatible
+            if not self._validate_network_compatibility():
+                raise ValueError(
+                    "Q-network and target network must have the same architecture (layer sizes). "
+                    "They can have different hyperparameters (dropout, batch norm, etc.) but "
+                    "the basic structure must be identical for DQN to work properly."
+                )
+        elif share_config and q_network:
+            self.target_network = NetworkConfig(**q_network)
+        else:
+            self.target_network = None
+            
+    def _validate_network_compatibility(self) -> bool:
+        """
+        Validate that Q-network and target network have compatible architectures.
+        Returns True if architectures are compatible, False otherwise.
+        """
+        if not (self.q_network and self.target_network):
+            return True
+            
+        if len(self.q_network.layers) != len(self.target_network.layers):
+            return False
+            
+        # Check that layer sizes match
+        for q_layer, t_layer in zip(self.q_network.layers, self.target_network.layers):
+            if q_layer.size != t_layer.size:
+                return False
+                
+        return True

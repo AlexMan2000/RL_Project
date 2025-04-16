@@ -3,7 +3,9 @@ import numpy as np
 import torch
 from typing import Optional, Dict, Any, Union, List
 from enum import Enum
-from value_based import ValueBasedAgent
+# from value_based import ValueBasedAgent   # This is a more enhanced version of the ValueBasedAgent
+# from value_based.mlp_model import ValueBasedAgent
+from value_based.cnn_model import ValueBasedAgent
 from model_based import ModelBasedAgent
 from policy_based import PolicyBasedAgent
 import random

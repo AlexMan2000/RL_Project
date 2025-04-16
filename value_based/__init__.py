@@ -7,30 +7,31 @@ import random
 from config import RLConfig, BoardConfig, ModelConfig
 from typing import List, Optional
 
-class DimensionHandler(nn.Module):
-    """Handle input dimensions for batch normalization."""
-    def forward(self, x):
-        if x.dim() == 1:
-            x = x.unsqueeze(0)
-        return x
-
 class BatchNormWrapper(nn.Module):
-    """Wrapper for BatchNorm1d to handle both single samples and batches."""
+    """Wrapper for BatchNorm1d that handles both training and evaluation modes properly."""
     def __init__(self, num_features):
         super().__init__()
         self.bn = nn.BatchNorm1d(num_features)
         
     def forward(self, x):
         if x.dim() == 1:
-            # Single sample case
-            return x  # Skip batch norm for single samples
-        return self.bn(x)
+            # During action selection (single sample)
+            self.bn.eval()  # Set to evaluation mode
+            with torch.no_grad():
+                x = x.unsqueeze(0)  # Add batch dimension
+                x = self.bn(x)
+                x = x.squeeze(0)  # Remove batch dimension
+            self.bn.train()  # Reset to training mode
+            return x
+        else:
+            # During training (batch of samples)
+            return self.bn(x)
 
 class QNetwork(nn.Module):
-    def __init__(self, input_dim: int, output_dim: int, model_config: Optional[ModelConfig] = None):
+    def __init__(self, input_dim: int, output_dim: int, network_config: Optional[dict] = None):
         super().__init__()
         
-        if model_config is None:
+        if network_config is None:
             # Default architecture if no config provided
             self.network = nn.Sequential(
                 nn.Linear(input_dim, 128),
@@ -45,7 +46,7 @@ class QNetwork(nn.Module):
             current_dim = input_dim
             
             # Add hidden layers
-            for layer_config in model_config.layers:
+            for layer_config in network_config["layers"]:
                 # Add linear layer
                 layers.append(nn.Linear(current_dim, layer_config.size))
                 
@@ -58,7 +59,15 @@ class QNetwork(nn.Module):
                     layers.append(nn.LayerNorm(layer_config.size))
                 
                 # Add activation
-                layers.append(layer_config.activation_fn)
+                activation = layer_config.activation.lower()
+                if activation == "relu":
+                    layers.append(nn.ReLU())
+                elif activation == "leaky_relu":
+                    layers.append(nn.LeakyReLU())
+                elif activation == "gelu":
+                    layers.append(nn.GELU())
+                elif activation == "tanh":
+                    layers.append(nn.Tanh())
                 
                 # Add dropout if specified
                 if layer_config.dropout_rate > 0:
@@ -72,8 +81,9 @@ class QNetwork(nn.Module):
             self.network = nn.Sequential(*layers)
             
             # Initialize weights if specified
-            if model_config.initialization != "default":
-                self._initialize_weights(model_config.initialization)
+            initialization = network_config.get("initialization", "default")
+            if initialization != "default":
+                self._initialize_weights(initialization)
 
     def _initialize_weights(self, method: str):
         """Initialize network weights using specified method."""
@@ -98,18 +108,29 @@ class ValueBasedAgent:
         self.device = torch.device(rl_config.device)
         
         # Initialize Q-network and target network
+        if model_config:
+            q_network_config = vars(model_config.q_network) if model_config.q_network else None
+            if model_config.share_config:
+                target_network_config = q_network_config
+            else:
+                target_network_config = vars(model_config.target_network) if model_config.target_network else None
+        else:
+            q_network_config = None
+            target_network_config = None
+        
         self.q_network = QNetwork(
             input_dim=self.board_config.board_size ** 2,
             output_dim=4,
-            model_config=model_config
+            network_config=q_network_config
         ).to(self.device)
         
         self.target_network = QNetwork(
             input_dim=self.board_config.board_size ** 2,
             output_dim=4,
-            model_config=model_config
+            network_config=target_network_config
         ).to(self.device)
         
+        # Initialize target network with same weights as Q-network, this is required, two models should have same weights
         self.target_network.load_state_dict(self.q_network.state_dict())
         
         # Optimizer
