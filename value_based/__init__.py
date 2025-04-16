@@ -7,6 +7,25 @@ import random
 from config import RLConfig, BoardConfig, ModelConfig
 from typing import List, Optional
 
+class DimensionHandler(nn.Module):
+    """Handle input dimensions for batch normalization."""
+    def forward(self, x):
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        return x
+
+class BatchNormWrapper(nn.Module):
+    """Wrapper for BatchNorm1d to handle both single samples and batches."""
+    def __init__(self, num_features):
+        super().__init__()
+        self.bn = nn.BatchNorm1d(num_features)
+        
+    def forward(self, x):
+        if x.dim() == 1:
+            # Single sample case
+            return x  # Skip batch norm for single samples
+        return self.bn(x)
+
 class QNetwork(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, model_config: Optional[ModelConfig] = None):
         super().__init__()
@@ -32,7 +51,7 @@ class QNetwork(nn.Module):
                 
                 # Add batch norm if specified
                 if layer_config.batch_norm:
-                    layers.append(nn.BatchNorm1d(layer_config.size))
+                    layers.append(BatchNormWrapper(layer_config.size))
                 
                 # Add layer norm if specified
                 if layer_config.layer_norm:

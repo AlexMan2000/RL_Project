@@ -176,17 +176,17 @@ def create_env(config: BoardConfig) -> Game2048Env:
     """Create and return the 2048 environment."""
     return Game2048Env(config.board_size, config.init_board)
 
-def create_agent(rl_config: RLConfig, board_config: BoardConfig):
+def create_agent(rl_config: RLConfig, board_config: BoardConfig, model_config: Optional[ModelConfig] = None):
     """Create and return the appropriate RL agent based on the configuration."""
     if isinstance(rl_config.method, str):
         rl_config.method = RLMethod(rl_config.method)
     
     if rl_config.method == RLMethod.MODEL_BASED:
-        return ModelBasedAgent(rl_config, board_config)
+        return ModelBasedAgent(rl_config, board_config, model_config)
     elif rl_config.method == RLMethod.VALUE_BASED:
-        return ValueBasedAgent(rl_config, board_config)
+        return ValueBasedAgent(rl_config, board_config, model_config)
     elif rl_config.method == RLMethod.POLICY_BASED:
-        return PolicyBasedAgent(rl_config, board_config)
+        return PolicyBasedAgent(rl_config, board_config, model_config)
     else:
         raise ValueError(f"Unknown RL method: {rl_config.method}")
 
@@ -217,7 +217,7 @@ def train(
     if env is None:
         env = create_env(board_config)
     if agent is None:
-        agent = create_agent(rl_config, board_config)
+        agent = create_agent(rl_config, board_config, model_config)
     
     # Create save directory if it doesn't exist
     os.makedirs(save_dir, exist_ok=True)
@@ -351,7 +351,7 @@ def main():
     stats = train(
         rl_config, 
         board_config,
-        model_config=model_config,
+        model_config,
         render=args.render, 
         save_dir=args.save_dir, 
         save_every=args.save_every, 
