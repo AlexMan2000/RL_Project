@@ -7,7 +7,7 @@ from enum import Enum
 # from value_based.mlp_model import ValueBasedAgent
 from value_based.cnn_model import ValueBasedAgent
 from model_based import ModelBasedAgent
-from policy_based import PolicyBasedAgent
+from policy_based.pgmc import PolicyBasedAgent
 import random
 from config import RLConfig, BoardConfig, RLMethod, ModelConfig
 import json
@@ -184,10 +184,13 @@ def create_agent(rl_config: RLConfig, board_config: BoardConfig, model_config: O
         rl_config.method = RLMethod(rl_config.method)
     
     if rl_config.method == RLMethod.MODEL_BASED:
+        print("Model based agent")
         return ModelBasedAgent(rl_config, board_config, model_config)
     elif rl_config.method == RLMethod.VALUE_BASED:
+        print("Value based agent")
         return ValueBasedAgent(rl_config, board_config, model_config)
     elif rl_config.method == RLMethod.POLICY_BASED:
+        print("Policy based agent")
         return PolicyBasedAgent(rl_config, board_config, model_config)
     else:
         raise ValueError(f"Unknown RL method: {rl_config.method}")
