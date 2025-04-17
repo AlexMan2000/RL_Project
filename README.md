@@ -22,4 +22,7 @@ python main.py --num-episodes 10 --no-save --method policy_based --policy_based_
 
 # For value-based algorithms
 python main.py --num-episodes 10 --no-save --method value_based --value_based_model mlp
+
+# For model-based algorithms
+python main.py --num-episodes 100 --no-save --method model_based
 ```
