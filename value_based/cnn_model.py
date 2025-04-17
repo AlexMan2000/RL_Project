@@ -71,7 +71,7 @@ class QNetwork(nn.Module):
         
         return x.squeeze(0) if state.dim() == 1 else x
 
-class ValueBasedAgent:
+class CNNValueBasedAgent:
     def __init__(self, rl_config: RLConfig, board_config: BoardConfig, model_config: Optional[ModelConfig] = None):
         self.rl_config = rl_config
         self.board_config = board_config

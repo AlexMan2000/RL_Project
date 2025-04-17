@@ -1,5 +1,6 @@
 """
-Policy based agent using Monte Carlo sampling, called Policy Gradient Monte Carlo
+Policy based agent using Monte Carlo sampling, called Policy Gradient Monte Carlo, page 16 of lecture 7 slides,
+it uses the policy gradient theorem to update the policy parameters θ, it only learns the policy, not the value function
 """
 
 
@@ -7,8 +8,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-from collections import deque
-import random
 from config import RLConfig, BoardConfig, ModelConfig
 from typing import Optional
 
@@ -30,7 +29,7 @@ class PolicyNetwork(nn.Module):
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         return self.network(state)
 
-class PolicyBasedAgent:
+class PGMCAgent:
     def __init__(self, rl_config: RLConfig, board_config: BoardConfig, model_config: Optional[ModelConfig] = None):
         self.rl_config = rl_config
         self.board_config = board_config

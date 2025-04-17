@@ -4,15 +4,19 @@ import torch
 from typing import Optional, Dict, Any, Union, List
 from enum import Enum
 # from value_based import ValueBasedAgent   # This is a more enhanced version of the ValueBasedAgent
-# from value_based.mlp_model import ValueBasedAgent
-from value_based.cnn_model import ValueBasedAgent
+from value_based.mlp_model import MLPValueBasedAgent
+from value_based.cnn_model import CNNValueBasedAgent
 from model_based import ModelBasedAgent
-from policy_based.pgmc import PolicyBasedAgent
+from policy_based.pgmc import PGMCAgent
+from policy_based.actor_critic import ActorCriticAgent
+from policy_based.trpo import TRPOAgent
+from policy_based.ppo import PPOAgent
 import random
 from config import RLConfig, BoardConfig, RLMethod, ModelConfig
 import json
 import os
 from datetime import datetime
+
 
 class EnhancedJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -178,20 +182,39 @@ def create_env(config: BoardConfig) -> Game2048Env:
     """Create and return the 2048 environment."""
     return Game2048Env(config.board_size, config.init_board)
 
-def create_agent(rl_config: RLConfig, board_config: BoardConfig, model_config: Optional[ModelConfig] = None):
+def create_agent(
+        rl_config: RLConfig, 
+        board_config: BoardConfig, 
+        model_config: Optional[ModelConfig] = None, 
+        policy_based_model: Optional[str] = None, 
+        value_based_model: Optional[str] = None):
     """Create and return the appropriate RL agent based on the configuration."""
     if isinstance(rl_config.method, str):
         rl_config.method = RLMethod(rl_config.method)
     
     if rl_config.method == RLMethod.MODEL_BASED:
         print("Model based agent")
-        return ModelBasedAgent(rl_config, board_config, model_config)
+        raise NotImplementedError("Model based agent is not implemented")
     elif rl_config.method == RLMethod.VALUE_BASED:
         print("Value based agent")
-        return ValueBasedAgent(rl_config, board_config, model_config)
+        if value_based_model == "cnn":
+            return CNNValueBasedAgent(rl_config, board_config, model_config)
+        elif value_based_model == "mlp":
+            return MLPValueBasedAgent(rl_config, board_config, model_config)
+        else:
+            raise ValueError(f"Unknown value based model: {value_based_model}")
     elif rl_config.method == RLMethod.POLICY_BASED:
         print("Policy based agent")
-        return PolicyBasedAgent(rl_config, board_config, model_config)
+        if policy_based_model == "ppo":
+            return PPOAgent(rl_config, board_config, model_config)
+        elif policy_based_model == "trpo":
+            return TRPOAgent(rl_config, board_config, model_config)
+        elif policy_based_model == "pgmc":
+            return PGMCAgent(rl_config, board_config, model_config)
+        elif policy_based_model == "actor_critic":
+            return ActorCriticAgent(rl_config, board_config, model_config)
+        else:
+            raise ValueError(f"Unknown policy based model: {policy_based_model}")
     else:
         raise ValueError(f"Unknown RL method: {rl_config.method}")
 
@@ -199,6 +222,8 @@ def train(
     rl_config: RLConfig,
     board_config: BoardConfig,
     model_config: Optional[ModelConfig] = None,
+    policy_based_model: Optional[str] = None,
+    value_based_model: Optional[str] = None,
     env: Optional[Game2048Env] = None,
     agent: Optional[Any] = None,
     render: bool = False,
@@ -222,7 +247,7 @@ def train(
     if env is None:
         env = create_env(board_config)
     if agent is None:
-        agent = create_agent(rl_config, board_config, model_config)
+        agent = create_agent(rl_config, board_config, model_config, policy_based_model, value_based_model)
     
     # Create save directory if it doesn't exist
     os.makedirs(save_dir, exist_ok=True)
@@ -296,6 +321,12 @@ def main():
     parser.add_argument("--method", type=str, default="value_based",
                        choices=[e.value for e in RLMethod],
                        help="RL method to use")
+    parser.add_argument("--policy_based_model", type=str, default="pgmc",
+                       choices=["pgmc", "actor_critic", "trpo", "ppo"],
+                       help="Policy based model to use")
+    parser.add_argument("--value_based_model", type=str, default="mlp",
+                       choices=["mlp", "cnn"],
+                       help="Value based model to use")
     parser.add_argument("--board-size", type=int, default=4,
                        help="Board size")
     parser.add_argument("--num-episodes", type=int, default=1000,
@@ -357,6 +388,8 @@ def main():
         rl_config, 
         board_config,
         model_config,
+        policy_based_model=args.policy_based_model,
+        value_based_model=args.value_based_model,
         render=args.render, 
         save_dir=args.save_dir, 
         save_every=args.save_every, 

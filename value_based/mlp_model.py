@@ -6,7 +6,7 @@ from collections import deque
 import random
 from config import RLConfig, BoardConfig, ModelConfig
 from typing import Optional
-class ValueBasedAgent:
+class MLPValueBasedAgent:
     def __init__(self, rl_config: RLConfig, board_config: BoardConfig, model_config: Optional[ModelConfig] = None):
         self.rl_config = rl_config
         self.board_config = board_config
