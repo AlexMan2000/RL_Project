@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any, Union, List
 from enum import Enum
 from value_based.mlp_model import MLPValueBasedAgent
 from value_based.cnn_model import CNNValueBasedAgent
-from model_based import ModelBasedAgent
+from model_based.mdp import MDPAgent
 from policy_based.pgmc import PGMCAgent
 from policy_based.actor_critic import ActorCriticAgent
 from policy_based.trpo import TRPOAgent
@@ -193,7 +193,7 @@ def create_agent(
     
     if rl_config.method == RLMethod.MODEL_BASED:
         print("Model based agent")
-        raise NotImplementedError("Model based agent is not implemented")
+        return MDPAgent(rl_config, board_config, model_config)
     elif rl_config.method == RLMethod.VALUE_BASED:
         print("Value based agent")
         if value_based_model == "cnn":
@@ -227,7 +227,7 @@ def train(
     agent: Optional[Any] = None,
     render: bool = False,
     save_dir: str = "results",
-    save_every: int = 10,
+    log_every: int = 10,
     no_save: bool = False
 ) -> Dict[str, Any]:
     """
@@ -284,14 +284,15 @@ def train(
         stats["episode_lengths"].append(step + 1)
         stats["best_score"] = max(stats["best_score"], episode_reward)
         
-        if episode % save_every == 0 and not no_save:
+        if episode % log_every == 0:
             print(f"Episode {episode}, Reward: {episode_reward}, Best Score: {stats['best_score']}")
             
             # Save intermediate results every 10 episodes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             save_path = os.path.join(save_dir, f"training_stats_{timestamp}.json")
-            with open(save_path, 'w') as f:
-                json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
+            if not no_save:
+                with open(save_path, 'w') as f:
+                    json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
     
     # Save final results
     if not no_save:
@@ -344,8 +345,8 @@ def main():
                        help="Path to model architecture configuration JSON file")
     parser.add_argument("--save-dir", type=str, default="results",
                        help="Directory to save training results")
-    parser.add_argument("--save-every", type=int, default=10,
-                       help="Save training results every N episodes")
+    parser.add_argument("--log-every", type=int, default=10,
+                       help="Log training results every N episodes")
     parser.add_argument("--no-save", action="store_true",
                        help="Do not save training results")
     
@@ -391,7 +392,7 @@ def main():
         value_based_model=args.value_based_model,
         render=args.render, 
         save_dir=args.save_dir, 
-        save_every=args.save_every, 
+        log_every=args.log_every, 
         no_save=args.no_save)
     print(f"Training completed. Best score: {stats['best_score']}")
     
