@@ -14,6 +14,7 @@ conda activate ./venv
 | | `--policy_based_model actor_critic` | Actor-Critic |
 | | `--policy_based_model trpo` | Trust Region Policy Optimization |
 | | `--policy_based_model ppo` | Proximal Policy Optimization |
+| Model-based (`--method model_based`) | NA | MDP Planning |
 
 ### Example Commands
 ```bash
