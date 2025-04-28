@@ -282,15 +282,6 @@ def train(
                 env.render()
             
             action = agent.select_action(state)
-
-            # if action == 0:
-            #     print("Action: up")
-            # elif action == 1:
-            #     print("Action: right")
-            # elif action == 2:
-            #     print("Action: down")
-            # elif action == 3:
-            #     print("Action: left")
             next_state, reward, done, _, _ = env.step(action)
             agent.update(state, action, reward, next_state, done)
             
@@ -304,6 +295,9 @@ def train(
         stats["episode_rewards"].append(episode_reward)
         stats["episode_lengths"].append(step + 1)
         stats["best_score"] = max(stats["best_score"], episode_reward)
+
+        print(f"Episode {episode}, final board:")
+        env.display_board()
         
         if episode % log_every == 0:
             print(f"Episode {episode}, Best Score: {stats['best_score']}")
