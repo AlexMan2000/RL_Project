@@ -16,7 +16,7 @@ class MLPValueBasedAgent:
         self.q_network = QNetwork(
             input_dim=self.board_config.board_size ** 2,  
             hidden_dim=rl_config.hidden_dim,
-            output_dim=4  
+            output_dim=4
         ).to(self.device)
         
         self.target_network = QNetwork(

@@ -15,6 +15,7 @@ from config import RLConfig, BoardConfig, RLMethod, ModelConfig
 import json
 import os
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 
 class EnhancedJSONEncoder(json.JSONEncoder):
@@ -317,6 +318,7 @@ def train(
     
     stats = {
         "episode_rewards": [],
+        "episode_scores": [],
         "episode_lengths": [],
         "best_score": 0,
         "config": {
@@ -350,14 +352,16 @@ def train(
                 break
         
         stats["episode_rewards"].append(episode_reward)
+        stats["episode_scores"].append(episode_score)
         stats["episode_lengths"].append(step + 1)
         stats["best_score"] = max(stats["best_score"], episode_score)
 
-        print(f"Episode {episode}, reward: {episode_reward}, current score: {episode_score}, best score: {stats['best_score']}, final board:")
-        env.display_board()
+        # print(f"Episode {episode}, reward: {episode_reward}, current score: {episode_score}, best score: {stats['best_score']}, final board:")
+        # env.display_board()
         
         if episode % log_every == 0:
-            print(f"Episode {episode}, Best Score: {stats['best_score']}")
+            print(f"Episode {episode}, current score: {episode_score}, best score: {stats['best_score']}")
+            # env.display_board()
             # Save intermediate results every 10 episodes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             algorithm_name = rl_config.method
@@ -375,7 +379,27 @@ def train(
             json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
         print(f"Results saved in directory: {save_dir}")
 
+    # Plot training progress
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(stats["episode_scores"])), stats["episode_scores"], label='Episode Score')
+    plt.xlabel('Episode')
+    plt.ylabel('Score')
+    plt.title('Training Progress')
+    plt.legend()
+    plt.grid(True)
     
+    # Create training_results directory if it doesn't exist
+    os.makedirs('training_results', exist_ok=True)
+    
+    # Save the plot
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    algorithm_name = rl_config.method
+    model_name = value_based_model if rl_config.method == RLMethod.VALUE_BASED else policy_based_model
+    plot_path = os.path.join('training_results', f'training_progress_{timestamp}_{algorithm_name}_{model_name}.png')
+    plt.savefig(plot_path)
+    plt.close()
+    print(f"Training progress plot saved to: {plot_path}")
+
     return stats
 
 def load_config(config_file: str) -> Dict[str, Any]:
