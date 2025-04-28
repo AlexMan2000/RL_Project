@@ -36,7 +36,12 @@ class Game2048Env(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
 
-    def __init__(self, board_size: int = 4, init_board: Optional[np.ndarray] = None, render_mode: str = None):
+    def __init__(self, 
+        board_size: int = 4, 
+        init_board: Optional[np.ndarray] = None, 
+        render_mode: str = None, 
+        reward_config: Optional[dict] = None
+    ):
         super().__init__()
         self.board_size = board_size
         self.action_space = gym.spaces.Discrete(4)  # 0: up, 1: right, 2: down, 3: left
@@ -52,6 +57,16 @@ class Game2048Env(gym.Env):
         self.clock = None
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        # Reward config
+        self.reward_config = reward_config or {
+            'merge_bonus': False,
+            'fullness_penalty': False,
+            'smoothness_bonus': False,
+            'corner_bonus': False,
+            'no_progress_penalty': False
+        }
+
+        print(self.reward_config)
 
 
     def _get_obs(self):
@@ -91,13 +106,13 @@ class Game2048Env(gym.Env):
 
     def step(self, action: int):
         board_before_action = self.board.copy()
-        reward = self._move(action)
+        total_score, total_reward = self._move(action)
         board_after_action = self.board.copy()
         is_valid_move = not np.array_equal(board_before_action, board_after_action)
         done = self._is_game_over()
         if not done and is_valid_move:
             self._add_new_tile()
-        return self.board, reward, done, False, {}
+        return self.board, total_score, total_reward, done, False, {}
 
     def _move(self, action: int):
         # Implement 2048 game logic here,
@@ -113,7 +128,10 @@ class Game2048Env(gym.Env):
             pass
 
         new_board = np.zeros_like(self.board)
+        total_score = 0
         total_reward = 0
+        merged_this_move = False
+        largest_merge = 0
         for i in range(self.board_size):
             row = self.board[i]
             # Step 1: remove zeros (slide left)
@@ -127,8 +145,12 @@ class Game2048Env(gym.Env):
                     skip = False
                     continue
                 if j + 1 < len(non_zero) and non_zero[j] == non_zero[j + 1]:
-                    merged.append(non_zero[j] * 2)
-                    total_reward += non_zero[j] * 2
+                    merged_value = non_zero[j] * 2
+                    merged.append(merged_value)
+                    total_score += merged_value
+                    merged_this_move = True
+                    if merged_value > largest_merge:
+                        largest_merge = merged_value
                     skip = True
                 else:
                     merged.append(non_zero[j])
@@ -145,7 +167,39 @@ class Game2048Env(gym.Env):
         elif action == 3:
             self.board = new_board
 
-        return total_reward
+
+        # --- Reward Shaping ---
+        total_reward += total_score
+        # 1. Merge bonus (encourage merging high-value tiles)
+        if self.reward_config.get('merge_bonus', True):
+            # Extra bonus for large merges
+            if largest_merge >= 32:
+                total_reward += (np.log2(largest_merge) - 4) * 10  # e.g., 32->10, 64->20, etc.
+        # 2. Fullness penalty (encourage survival)
+        if self.reward_config.get('fullness_penalty', True):
+            empty_cells = np.sum(new_board == 0)
+            total_reward += empty_cells * 0.5  # more empty = better
+        # 3. Smoothness bonus (encourage similar tiles adjacent)
+        if self.reward_config.get('smoothness_bonus', True):
+            smoothness = 0
+            for i in range(self.board_size):
+                for j in range(self.board_size - 1):
+                    if new_board[i, j] == new_board[i, j + 1] and new_board[i, j] != 0:
+                        smoothness += 1
+                    if new_board[j, i] == new_board[j + 1, i] and new_board[j, i] != 0:
+                        smoothness += 1
+            total_reward += smoothness
+        # 4. Corner bonus (encourage largest tile in a corner)
+        if self.reward_config.get('corner_bonus', True):
+            max_tile = np.max(new_board)
+            corners = [new_board[0, 0], new_board[0, -1], new_board[-1, 0], new_board[-1, -1]]
+            if max_tile in corners:
+                total_reward += 10
+        # 5. No progress penalty (discourage no merges or no displacement)
+        if self.reward_config.get('no_progress_penalty', True):
+            if not merged_this_move and np.array_equal(self.board, new_board):
+                total_reward -= 5
+        return total_score, total_reward
 
     def _add_new_tile(self):
         # Add a new tile (2 or 4) to a random empty position
@@ -186,9 +240,9 @@ class Game2048Env(gym.Env):
             print("\t".join(f"{int(val):4d}" if val != 0 else "   ." for val in row))
         print()
 
-def create_env(config: BoardConfig) -> Game2048Env:
+def create_env(config: BoardConfig, reward_config: Optional[dict] = None) -> Game2048Env:
     """Create and return the 2048 environment."""
-    return Game2048Env(config.board_size, config.init_board)
+    return Game2048Env(config.board_size, config.init_board, reward_config=reward_config)
 
 def create_agent(
         rl_config: RLConfig, 
@@ -237,7 +291,8 @@ def train(
     render: bool = False,
     save_dir: str = "results",
     log_every: int = 10,
-    no_save: bool = False
+    no_save: bool = False,
+    reward_config: Optional[dict] = None
 ) -> Dict[str, Any]:
     """
     Train the RL agent on the 2048 environment.
@@ -253,7 +308,7 @@ def train(
         Dictionary containing training statistics
     """
     if env is None:
-        env = create_env(board_config)
+        env = create_env(board_config, reward_config)
     if agent is None:
         agent = create_agent(rl_config, board_config, model_config, policy_based_model, value_based_model)
     
@@ -275,6 +330,7 @@ def train(
     for episode in range(rl_config.num_episodes):
         state, _ = env.reset()
         episode_reward = 0
+        episode_score = 0
         done = False
 
         for step in range(rl_config.max_steps):
@@ -282,11 +338,12 @@ def train(
                 env.render()
             
             action = agent.select_action(state)
-            next_state, reward, done, _, _ = env.step(action)
-            agent.update(state, action, reward, next_state, done)
+            next_state, step_score, step_reward, done, _, _ = env.step(action)
+            agent.update(state, action, step_reward, next_state, done)
             
             state = next_state
-            episode_reward += reward
+            episode_score += step_score
+            episode_reward += step_reward
             
             # print(f"Episode {episode}, step {step}, current score: {episode_reward}") 
             if done:
@@ -294,16 +351,18 @@ def train(
         
         stats["episode_rewards"].append(episode_reward)
         stats["episode_lengths"].append(step + 1)
-        stats["best_score"] = max(stats["best_score"], episode_reward)
+        stats["best_score"] = max(stats["best_score"], episode_score)
 
-        print(f"Episode {episode}, final board:")
+        print(f"Episode {episode}, reward: {episode_reward}, current score: {episode_score}, best score: {stats['best_score']}, final board:")
         env.display_board()
         
         if episode % log_every == 0:
             print(f"Episode {episode}, Best Score: {stats['best_score']}")
             # Save intermediate results every 10 episodes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_path = os.path.join(save_dir, f"training_stats_{timestamp}.json")
+            algorithm_name = rl_config.method
+            model_name = value_based_model if rl_config.method == RLMethod.VALUE_BASED else policy_based_model
+            save_path = os.path.join(save_dir, f"{algorithm_name}_{model_name}_episode_{episode}_{timestamp}.json")
             if not no_save:
                 with open(save_path, 'w') as f:
                     json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
@@ -327,6 +386,19 @@ def load_config(config_file: str) -> Dict[str, Any]:
 def create_model_config(config_dict: Dict[str, Any]) -> ModelConfig:
     """Create ModelConfig from dictionary."""
     return ModelConfig(**config_dict)
+
+def load_reward_config(config_file: str) -> dict:
+    if not os.path.exists(config_file):
+        # Default config if file does not exist
+        return {
+            'merge_bonus': True,
+            'fullness_penalty': True,
+            'smoothness_bonus': True,
+            'corner_bonus': True,
+            'no_progress_penalty': True
+        }
+    with open(config_file, 'r') as f:
+        return json.load(f)
 
 def main():
     import argparse
@@ -365,6 +437,8 @@ def main():
                        help="Log training results every N episodes")
     parser.add_argument("--no-save", action="store_true",
                        help="Do not save training results")
+    parser.add_argument("--reward-config-file", type=str, default="config_files/reward_config.json",
+                       help="Path to reward configuration JSON file")
     
     args = parser.parse_args()
 
@@ -397,6 +471,8 @@ def main():
     else:
         model_config = None
 
+    reward_config = load_reward_config(args.reward_config_file)
+
     # Create configs
     rl_config = RLConfig(**rl_config_dict)
     board_config = BoardConfig(**board_config_dict)
@@ -410,7 +486,8 @@ def main():
         render=args.render, 
         save_dir=args.save_dir, 
         log_every=args.log_every, 
-        no_save=args.no_save)
+        no_save=args.no_save,
+        reward_config=reward_config)
     print(f"Training completed. Best score: {stats['best_score']}")
     
 if __name__ == "__main__":
