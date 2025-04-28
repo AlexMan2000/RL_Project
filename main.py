@@ -64,7 +64,7 @@ class Game2048Env(gym.Env):
         board = np.zeros((self.board_size, self.board_size), dtype=int)
 
         # Randomly choose two distinct empty cells, first is (x1, y1), second is (x2, y2)
-        [first, second] = self._sample_empty_positions(2)
+        [first, second] = self._sample_empty_positions(2, board)
 
         # Place either a 2 (90% chance) or 4 (10% chance)
         board[first] = 2 if random.random() < 0.9 else 4
@@ -73,8 +73,10 @@ class Game2048Env(gym.Env):
         return board
     
 
-    def _sample_empty_positions(self, k=1):
-        empty_positions = [(i, j) for i in range(self.board_size) for j in range(self.board_size)]
+    def _sample_empty_positions(self, k=1, board=None):
+        if board is None:
+            board = self.board
+        empty_positions = [(i, j) for i in range(self.board_size) for j in range(self.board_size) if board[i, j] == 0]
         if not empty_positions:
             return
         return random.sample(empty_positions, k)
@@ -88,9 +90,12 @@ class Game2048Env(gym.Env):
         return self.board, {}
 
     def step(self, action: int):
+        board_before_action = self.board.copy()
         reward = self._move(action)
+        board_after_action = self.board.copy()
+        is_valid_move = not np.array_equal(board_before_action, board_after_action)
         done = self._is_game_over()
-        if not done:
+        if not done and is_valid_move:
             self._add_new_tile()
         return self.board, reward, done, False, {}
 
@@ -127,11 +132,9 @@ class Game2048Env(gym.Env):
                     skip = True
                 else:
                     merged.append(non_zero[j])
-            
             # Step 3: pad with zeros to the right
             merged += [0] * (self.board_size - len(merged))
             new_board[i] = merged
-
         # Restore board orientation
         if action == 0:
             self.board = np.rot90(new_board, k=3)
@@ -163,6 +166,7 @@ class Game2048Env(gym.Env):
         if np.any(self.board == 0):
             return False
 
+        # If the board is full, check if any mergeable horizontal or vertical pair exists
         # Check for horizontal merges
         for i in range(self.board_size):
             for j in range(self.board_size - 1):
@@ -176,6 +180,11 @@ class Game2048Env(gym.Env):
                     return False
 
         return True
+
+    def display_board(self):
+        for row in self.board:
+            print("\t".join(f"{int(val):4d}" if val != 0 else "   ." for val in row))
+        print()
 
 def create_env(config: BoardConfig) -> Game2048Env:
     """Create and return the 2048 environment."""
@@ -260,23 +269,35 @@ def train(
             "board_config": board_config
         }
     }
+
+    
     
     for episode in range(rl_config.num_episodes):
         state, _ = env.reset()
         episode_reward = 0
         done = False
-        
+
         for step in range(rl_config.max_steps):
             if render:
                 env.render()
             
             action = agent.select_action(state)
+
+            # if action == 0:
+            #     print("Action: up")
+            # elif action == 1:
+            #     print("Action: right")
+            # elif action == 2:
+            #     print("Action: down")
+            # elif action == 3:
+            #     print("Action: left")
             next_state, reward, done, _, _ = env.step(action)
             agent.update(state, action, reward, next_state, done)
             
             state = next_state
             episode_reward += reward
             
+            # print(f"Episode {episode}, step {step}, current score: {episode_reward}") 
             if done:
                 break
         
@@ -285,8 +306,7 @@ def train(
         stats["best_score"] = max(stats["best_score"], episode_reward)
         
         if episode % log_every == 0:
-            print(f"Episode {episode}, Reward: {episode_reward}, Best Score: {stats['best_score']}")
-            
+            print(f"Episode {episode}, Best Score: {stats['best_score']}")
             # Save intermediate results every 10 episodes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             save_path = os.path.join(save_dir, f"training_stats_{timestamp}.json")
@@ -331,6 +351,8 @@ def main():
                        help="Board size")
     parser.add_argument("--num-episodes", type=int, default=1000,
                        help="Number of episodes to train")
+    parser.add_argument("--max-steps-per-episode", type=int, default=1000,
+                       help="Maximum number of steps per episode")
     parser.add_argument("--learning-rate", type=float, default=0.001,
                        help="Learning rate")
     parser.add_argument("--gamma", type=float, default=0.99,
@@ -363,6 +385,7 @@ def main():
         rl_config_dict = {
             "method": args.method,
             "num_episodes": args.num_episodes,
+            "max_steps": args.max_steps_per_episode,
             "learning_rate": args.learning_rate,
             "gamma": args.gamma
         }
