@@ -4,7 +4,7 @@ conda env create -f environment.yml --prefix ./venv
 conda activate ./venv
 ```
 
-### Available Models
+## Available Models
 
 | Method | Model Option | Description |
 |--------|-------------|-------------|
@@ -19,14 +19,32 @@ conda activate ./venv
 ### Example Commands
 ```bash
 # For policy-based algorithms
-python main.py --num-episodes 10 --no-save --method policy_based --policy_based_model pgmc
+python train.py --num-episodes 10 --no-save --method policy_based --policy_based_model pgmc
 
 # For value-based algorithms
-python main.py --num-episodes 10 --no-save --method value_based --value_based_model mlp
+python train.py --num-episodes 10 --no-save --method value_based --value_based_model mlp
 
 # For model-based algorithms
-python main.py --num-episodes 100 --no-save --method model_based
+python train.py --num-episodes 100 --no-save --method model_based
 ```
+
+
+# Training
+## Train with default parameters
+To train for a particular model: execute:
+```bash
+# Train DQN model for 2048, train for 100 episodes, and save model checkpoints every 10 episodes with visualization graph
+python train.py --num-episodes 100 --log-every 10 --method value_based --value_based_model mlp
+
+# Train DQN model for 2048, train for 100 episodes, and don't save model checkpoints, but with visualization graph
+python train.py --num-episodes 100 --log-every 10 --method value_based --value_based_model mlp --no-save
+```
+
+
+## Adjust parameters 
+### For DQN
+You can adjust the parameter for DQN in the config.py RLConfig class where you can specify the `batch_size`(for small number of episodes like 200, `batch_size` shouldn't be too big, 16 or 32 is fine), the `epsilon`, and `gamma`. Or you can modify the model structure in `value_based/mlp_model.py`(or `value_based/cnn_model.py`)
+
 
 
 # Experiments and Evaluation

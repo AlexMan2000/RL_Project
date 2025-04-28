@@ -11,7 +11,7 @@ import time
 from datetime import datetime
 import json
 
-from main import train, RLConfig, BoardConfig
+from train import train, RLConfig, BoardConfig
 from config import RLMethod
 
 def run_experiment(

@@ -9,7 +9,7 @@ import pygame
 import time
 from typing import Optional, Tuple
 
-from main import Game2048Env, create_agent, RLConfig, BoardConfig
+from train import Game2048Env, create_agent, RLConfig, BoardConfig
 
 class GameVisualizer:  
     """Visualize the 2048 game and agent's decision making"""

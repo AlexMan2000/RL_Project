@@ -199,7 +199,7 @@ class Game2048Env(gym.Env):
         # 5. No progress penalty (discourage no merges or no displacement)
         if self.reward_config.get('no_progress_penalty', True):
             if not merged_this_move and np.array_equal(self.board, new_board):
-                total_reward -= 5
+                total_reward -= 100
         return total_score, total_reward
 
     def _add_new_tile(self):
@@ -290,7 +290,7 @@ def train(
     env: Optional[Game2048Env] = None,
     agent: Optional[Any] = None,
     render: bool = False,
-    save_dir: str = "results",
+    save_dir: str = "trained_models",
     log_every: int = 10,
     no_save: bool = False,
     reward_config: Optional[dict] = None
@@ -327,15 +327,28 @@ def train(
         }
     }
 
+    algorithm_name = rl_config.method.value
+    model_name = value_based_model if rl_config.method == RLMethod.VALUE_BASED else policy_based_model
+    subfolder = os.path.join(save_dir, f"{algorithm_name}_{model_name}")
+    os.makedirs(subfolder, exist_ok=True)
+
+
+    stats_log_every = {
+        "episode_rewards": [],
+        "episode_scores": [],
+        "episode_lengths": [],
+        "best_score": 0
+    }
     
-    
-    for episode in range(rl_config.num_episodes):
+    for episode in range(1, rl_config.num_episodes + 1):
         state, _ = env.reset()
         episode_reward = 0
         episode_score = 0
         done = False
 
-        for step in range(rl_config.max_steps):
+        # for step in range(rl_config.max_steps):
+        step = 0
+        while not done:
             if render:
                 env.render()
             
@@ -347,37 +360,70 @@ def train(
             episode_score += step_score
             episode_reward += step_reward
             
-            # print(f"Episode {episode}, step {step}, current score: {episode_reward}") 
             if done:
                 break
+            step += 1
+
         
         stats["episode_rewards"].append(episode_reward)
         stats["episode_scores"].append(episode_score)
         stats["episode_lengths"].append(step + 1)
         stats["best_score"] = max(stats["best_score"], episode_score)
 
-        # print(f"Episode {episode}, reward: {episode_reward}, current score: {episode_score}, best score: {stats['best_score']}, final board:")
-        # env.display_board()
+        stats_log_every["episode_rewards"].append(episode_reward)
+        stats_log_every["episode_scores"].append(episode_score)
+        stats_log_every["episode_lengths"].append(step + 1)
+        stats_log_every["best_score"] = max(stats_log_every["best_score"], episode_score)
         
         if episode % log_every == 0:
-            print(f"Episode {episode}, current score: {episode_score}, best score: {stats['best_score']}")
-            # env.display_board()
-            # Save intermediate results every 10 episodes
+
+            print(f"Episode {episode - log_every} ~ {episode}, average reward: {sum(stats_log_every['episode_rewards']) / log_every}, avg score: {sum(stats_log_every['episode_scores']) / log_every}, best score ever: {stats['best_score']}")
+            # Save intermediate results every log_every episodes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            algorithm_name = rl_config.method
-            model_name = value_based_model if rl_config.method == RLMethod.VALUE_BASED else policy_based_model
-            save_path = os.path.join(save_dir, f"{algorithm_name}_{model_name}_episode_{episode}_{timestamp}.json")
+            stats_log_every = {
+                "episode_rewards": [],
+                "episode_scores": [],
+                "episode_lengths": [],
+                "best_score": 0
+            }
             if not no_save:
-                with open(save_path, 'w') as f:
-                    json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
+                save_path = os.path.join(subfolder, f"checkpoint_{episode}_{timestamp}.pt")
+                model_state = {}
+
+                # Value-based: DQN, etc.
+                if hasattr(agent, 'q_network'):
+                    model_state['q_network'] = agent.q_network.state_dict()
+                if hasattr(agent, 'target_network'):
+                    model_state['target_network'] = agent.target_network.state_dict()
+
+                # Policy-based: PPO, Actor-Critic, TRPO
+                if hasattr(agent, 'actor'):
+                    model_state['actor'] = agent.actor.state_dict()
+                if hasattr(agent, 'critic'):
+                    model_state['critic'] = agent.critic.state_dict()
+                if hasattr(agent, 'policy_network'):
+                    model_state['policy_network'] = agent.policy_network.state_dict()
+
+                # Model-based: MDPAgent (example: save model, value_function, policy if they have state_dict)
+                if hasattr(agent, 'model') and hasattr(agent.model, 'state_dict'):
+                    model_state['model'] = agent.model.state_dict()
+                if hasattr(agent, 'value_function') and hasattr(agent.value_function, 'state_dict'):
+                    model_state['value_function'] = agent.value_function.state_dict()
+                if hasattr(agent, 'policy') and hasattr(agent.policy, 'state_dict'):
+                    model_state['policy'] = agent.policy.state_dict()
+                if model_state:
+                    torch.save(model_state, save_path)
+                    print(f"Model parameters saved to: {save_path}")
+                else:
+                    print("No model parameters found to save for this agent.")
     
     # Save final results
     if not no_save:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        final_save_path = os.path.join(save_dir, f"final_training_stats_{timestamp}.json")
+        final_save_path = os.path.join(subfolder, f"final_training_stats_{timestamp}.json")
         with open(final_save_path, 'w') as f:
             json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
-        print(f"Results saved in directory: {save_dir}")
+        print(f"Results saved in directory: {subfolder}")
 
     # Plot training progress
     plt.figure(figsize=(10, 6))
@@ -387,15 +433,8 @@ def train(
     plt.title('Training Progress')
     plt.legend()
     plt.grid(True)
-    
-    # Create training_results directory if it doesn't exist
-    os.makedirs('training_results', exist_ok=True)
-    
-    # Save the plot
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    algorithm_name = rl_config.method
-    model_name = value_based_model if rl_config.method == RLMethod.VALUE_BASED else policy_based_model
-    plot_path = os.path.join('training_results', f'training_progress_{timestamp}_{algorithm_name}_{model_name}.png')
+    # Save the plot in the same subfolder as checkpoints
+    plot_path = os.path.join(subfolder, f'training_progress_{timestamp}.png')
     plt.savefig(plot_path)
     plt.close()
     print(f"Training progress plot saved to: {plot_path}")
@@ -455,7 +494,7 @@ def main():
                        help="Path to board configuration JSON file")
     parser.add_argument("--model-config-file", type=str,
                        help="Path to model architecture configuration JSON file")
-    parser.add_argument("--save-dir", type=str, default="results",
+    parser.add_argument("--save-dir", type=str, default="trained_models",
                        help="Directory to save training results")
     parser.add_argument("--log-every", type=int, default=10,
                        help="Log training results every N episodes")
