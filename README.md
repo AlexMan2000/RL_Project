@@ -76,26 +76,7 @@ This directory contains tools for evaluating and comparing different RL methods 
    - Learning curve characteristics
 
 ## Evaluation Script (`evaluate.py`)
-
-Runs comprehensive experiments comparing different methods:
-```bash
-python experiments/evaluate.py
-```
-
-This will:
-- Run each method multiple times
-- Generate learning curves
-- Create performance comparison tables
-- Save results to `experiment_results/`
-
-Output includes:
-- Learning curves plot
-- Training time comparison
-- Best scores distribution
-- Episode length analysis
-- Detailed CSV report
-
-## Running Experiments
+### Running Experiments
 
 1. **Quick Evaluation**
 ```bash
