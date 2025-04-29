@@ -38,6 +38,7 @@ def load_agent_state(agent, checkpoint):
 
 def evaluate_agent(agent, env, num_episodes=100, render=False):
     scores = []
+    boards = []  # Store final boards for each episode
     for ep in range(num_episodes):
         state, _ = env.reset()
         done = False
@@ -50,7 +51,8 @@ def evaluate_agent(agent, env, num_episodes=100, render=False):
             if render:
                 env.display_board()
         scores.append(score)
-        print(f"Episode {ep+1}: Score = {score}")
+        boards.append(state.copy())  # Store the final board for this episode
+        # print(f"Episode {ep+1}: Score = {score}")
     avg_score = np.mean(scores)
     std_score = np.std(scores)
     print(f"\nEvaluation over {num_episodes} episodes:")
@@ -58,6 +60,12 @@ def evaluate_agent(agent, env, num_episodes=100, render=False):
     print(f"Std Score: {std_score:.2f}")
     print(f"Max Score: {np.max(scores)}")
     print(f"Min Score: {np.min(scores)}")
+    # Display the board of the max-score episode
+    max_idx = int(np.argmax(scores))
+    print(f"\nFinal Board State of Highest Score Episode (Episode {max_idx+1}, Score: {scores[max_idx]}):")
+    for row in boards[max_idx]:
+        print("\t".join(f"{int(val):4d}" if val != 0 else "   ." for val in row))
+    print()
     return scores
 
 def main():
