@@ -216,7 +216,7 @@ class TRPOAgent:
         states, actions, rewards, values, log_probs, dones = self.memory.get_batch()
         
         # Convert to tensors
-        states = torch.FloatTensor(np.log2(states + 1)).to(self.device)
+        states = torch.FloatTensor(np.log2(states + 1)).view(states.shape[0], -1).to(self.device)
         actions = torch.LongTensor(actions).to(self.device)
         old_log_probs = torch.FloatTensor(log_probs).to(self.device)
         
