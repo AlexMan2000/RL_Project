@@ -36,23 +36,38 @@ def load_agent_state(agent, checkpoint):
     if hasattr(agent, 'policy') and 'policy' in checkpoint:
         agent.policy.load_state_dict(checkpoint['policy'])
 
-def evaluate_agent(agent, env, num_episodes=100, render=False):
+def evaluate_agent(agent, env, num_episodes=100, render=False, max_steps=None):
     scores = []
     boards = []  # Store final boards for each episode
     for ep in range(num_episodes):
         state, _ = env.reset()
         done = False
         score = 0
-        while not done:
-            action = agent.select_action(state)
-            next_state, step_score, _, done, _, _ = env.step(action)
-            state = next_state
-            score += step_score
-            if render:
-                env.display_board()
-        scores.append(score)
-        boards.append(state.copy())  # Store the final board for this episode
-        # print(f"Episode {ep+1}: Score = {score}")
+        if max_steps is not None:
+            steps = 0
+            while steps < max_steps:
+                action = agent.select_action(state)
+                next_state, step_score, _, done, _, _ = env.step(action)
+                state = next_state
+                score += step_score
+                if render:
+                    env.display_board()
+                steps += 1
+
+                scores.append(score)
+                boards.append(state.copy())  # Store the final board for this episode
+                # print(f"Episode {ep+1}: Score = {score}")
+        else:      
+            while not done:
+                action = agent.select_action(state)
+                next_state, step_score, _, done, _, _ = env.step(action)
+                state = next_state
+                score += step_score
+                if render:
+                    env.display_board()
+            scores.append(score)
+            boards.append(state.copy())  # Store the final board for this episode
+            # print(f"Episode {ep+1}: Score = {score}")
     avg_score = np.mean(scores)
     std_score = np.std(scores)
     print(f"\nEvaluation over {num_episodes} episodes:")
@@ -80,6 +95,7 @@ def main():
     parser.add_argument('--reward-config-file', type=str, default="config_files/reward_config.json", help='Path to reward config JSON')
     parser.add_argument('--num-episodes', type=int, default=100, help='Number of evaluation episodes')
     parser.add_argument('--render', action='store_true', help='Render the board during evaluation')
+    parser.add_argument('--max-steps-per-episode', type=int, default=None, help='Maximum number of steps per episode')
     args = parser.parse_args()
 
     # Load configs
@@ -110,7 +126,7 @@ def main():
     load_agent_state(agent, checkpoint)
 
     # Evaluate
-    evaluate_agent(agent, env, num_episodes=args.num_episodes, render=args.render)
+    evaluate_agent(agent, env, num_episodes=args.num_episodes, render=args.render, max_steps=args.max_steps_per_episode)
 
 if __name__ == "__main__":
     main()
