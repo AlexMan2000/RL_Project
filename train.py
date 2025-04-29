@@ -551,7 +551,7 @@ def main():
                        help="Board size")
     parser.add_argument("--num-episodes", type=int, default=1000,
                        help="Number of episodes to train")
-    parser.add_argument("--max-steps-per-episode", type=int, default=1000,
+    parser.add_argument("--max-steps-per-episode", type=int, default=None,
                        help="Maximum number of steps per episode")
     parser.add_argument("--learning-rate", type=float, default=0.001,
                        help="Learning rate")
