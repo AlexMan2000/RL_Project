@@ -374,7 +374,6 @@ def train(
                     break
                 step += 1
         else:    
-            print("Training until game over")
             while not done:
                 if render:
                     env.render()
