@@ -27,7 +27,7 @@ class RLConfig:
         epsilon: float = 1.0,
         epsilon_decay: float = 0.99,
         epsilon_min: float = 0.01,
-        batch_size: int = 16,
+        batch_size: int = 64,
         memory_size: int = 10000,
         target_update: int = 10,
         hidden_dim: int = 64,
