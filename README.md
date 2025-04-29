@@ -42,9 +42,15 @@ python train.py --num-episodes 100 --log-every 10 --method value_based --value_b
 
 
 ## Adjust parameters 
-### For DQN
-You can adjust the parameter for DQN in the config.py RLConfig class where you can specify the `batch_size`(for small number of episodes like 200, `batch_size` shouldn't be too big, 16 or 32 is fine), the `epsilon`, and `gamma`. Or you can modify the model structure in `value_based/mlp_model.py`(or `value_based/cnn_model.py`)
+### For value-based model (mlp, cnn)
+You can adjust the parameter for value-based models in the config.py RLConfig class where you can specify the `batch_size`(for small number of episodes like 200, `batch_size` shouldn't be too big, 16 or 32 is fine), the `epsilon`, and `gamma`. Or you can modify the model structure in `value_based/mlp_model.py`(or `value_based/cnn_model.py`)
 
+
+### For policy-based model(ppo, actor_critic, trpo, pgmc)
+You can adjust the parameter for policy-based models in the correponding model files. For example for PPO we can adjust `clip_epsilon` ,`n_epochs`, `gae_lambda`, `value_clip_range`, `entropy_coef` and `max_grad_norm` in the `__init__` function of PPOAgent. While the actor-critic neural network model parameters like `hidden_size` should be adjusted in the `RL_Config.py`.
+        
+
+### For model-based models
 
 
 # Experiments and Evaluation
@@ -69,9 +75,7 @@ This directory contains tools for evaluating and comparing different RL methods 
    - Policy stability across multiple runs
    - Learning curve characteristics
 
-## Available Tools
-
-### 1. Evaluation Script (`evaluate.py`)
+## Evaluation Script (`evaluate.py`)
 
 Runs comprehensive experiments comparing different methods:
 ```bash
@@ -91,60 +95,10 @@ Output includes:
 - Episode length analysis
 - Detailed CSV report
 
-### 2. Visualization Tool (`visualize.py`)
-
-Interactive visualization of trained agents:
-```bash
-python experiments/visualize.py
-```
-
-Features:
-- Real-time game board visualization
-- Action probability display (for applicable methods)
-- Step-by-step gameplay observation
-- Multiple episode playthrough
-
 ## Running Experiments
 
 1. **Quick Evaluation**
 ```bash
-# Run with default settings
-python experiments/evaluate.py
-
-# Customize number of episodes and runs
-python experiments/evaluate.py --num-episodes 2000 --num-runs 10
+# Run with default settings, will compute the avg score with 100 generated episodes using the trained q-values
+python evaluate.py --checkpoint path/to/checkpoint.pt --algorithm value_based --value_based_model mlp --num-episodes 100
 ```
-
-2. **Visualize Trained Agent**
-```bash
-# Interactive visualization
-python experiments/visualize.py
-
-# Adjust visualization speed
-python experiments/visualize.py --delay 0.3
-```
-
-3. **Analyzing Results**
-- Results are saved in `experiment_results/` with timestamp
-- Each run creates:
-  - `learning_curves.png`: Visual comparison
-  - `comparison_table.csv`: Detailed metrics
-  - `raw_results.json`: Complete data
-
-## Interpreting Results
-
-1. **Learning Curves**
-   - Faster convergence = Better sample efficiency
-   - Higher final value = Better performance
-   - Smaller variance = More stable learning
-
-2. **Computational Metrics**
-   - Training time
-   - Memory usage
-   - Number of model updates
-
-3. **Performance Comparison**
-   - Success rate in reaching 2048
-   - Average and best scores
-   - Policy stability
-   - Sample efficiency 

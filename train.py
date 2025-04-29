@@ -321,6 +321,7 @@ def train(
         "episode_scores": [],
         "episode_lengths": [],
         "best_score": 0,
+        "avg_scores": [],  # Track average scores per log_every episodes
         "config": {
             "rl_config": rl_config,
             "board_config": board_config
@@ -376,8 +377,10 @@ def train(
         stats_log_every["best_score"] = max(stats_log_every["best_score"], episode_score)
         
         if episode % log_every == 0:
+            avg_score = sum(stats_log_every['episode_scores']) / log_every
+            stats["avg_scores"].append(avg_score)  # Store the average score
 
-            print(f"Episode {episode - log_every} ~ {episode}, average reward: {sum(stats_log_every['episode_rewards']) / log_every}, avg score: {sum(stats_log_every['episode_scores']) / log_every}, best score ever: {stats['best_score']}")
+            print(f"Episode {episode - log_every} ~ {episode}, avg score: {avg_score}, best score ever: {stats['best_score']}")
             # Save intermediate results every log_every episodes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             stats_log_every = {
@@ -425,12 +428,27 @@ def train(
             json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
         print(f"Results saved in directory: {subfolder}")
 
-    # Plot training progress
-    plt.figure(figsize=(10, 6))
-    plt.plot(range(len(stats["episode_scores"])), stats["episode_scores"], label='Episode Score')
+    # Plot training progress with both raw scores and moving average
+    plt.figure(figsize=(12, 6))
+    
+    # Plot raw scores with lower alpha for better visibility
+    plt.plot(range(len(stats["episode_scores"])), stats["episode_scores"], 
+             label='Episode Score', alpha=0.3, color='blue')
+    
+    # Plot average scores
+    avg_x = range(log_every-1, len(stats["episode_scores"]), log_every)
+    plt.plot(avg_x, stats["avg_scores"], 
+             label=f'Average Score (per {log_every} episodes)', 
+             color='red', linewidth=2)
+    
+    # Add horizontal line for overall average
+    overall_avg = np.mean(stats["episode_scores"])
+    plt.axhline(y=overall_avg, color='green', linestyle='--', 
+                label=f'Overall Average: {overall_avg:.2f}')
+    
     plt.xlabel('Episode')
-    plt.ylabel('Score')
-    plt.title('Training Progress')
+    plt.ylabel('Avg Score')
+    plt.title('Training Progress Statistics')
     plt.legend()
     plt.grid(True)
     # Save the plot in the same subfolder as checkpoints
