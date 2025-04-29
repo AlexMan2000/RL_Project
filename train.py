@@ -316,11 +316,15 @@ def train(
     # Create save directory if it doesn't exist
     os.makedirs(save_dir, exist_ok=True)
     
+    # Record start time
+    start_time = datetime.now()
+    
     stats = {
         "episode_rewards": [],
         "episode_scores": [],
         "episode_lengths": [],
         "best_score": 0,
+        "best_board": None,  # Store the board state of the best score
         "avg_scores": [],  # Track average scores per log_every episodes
         "config": {
             "rl_config": rl_config,
@@ -340,6 +344,10 @@ def train(
         "episode_lengths": [],
         "best_score": 0
     }
+    
+    # See if GPU is available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
     
     for episode in range(1, rl_config.num_episodes + 1):
         state, _ = env.reset()
@@ -369,8 +377,12 @@ def train(
         stats["episode_rewards"].append(episode_reward)
         stats["episode_scores"].append(episode_score)
         stats["episode_lengths"].append(step + 1)
-        stats["best_score"] = max(stats["best_score"], episode_score)
-
+        
+        # Update best score and store the board state if it's a new best
+        if episode_score > stats["best_score"]:
+            stats["best_score"] = episode_score
+            stats["best_board"] = state.copy()  # Store the final board state
+        
         stats_log_every["episode_rewards"].append(episode_reward)
         stats_log_every["episode_scores"].append(episode_score)
         stats_log_every["episode_lengths"].append(step + 1)
@@ -428,6 +440,13 @@ def train(
             json.dump(stats, f, indent=4, cls=EnhancedJSONEncoder)
         print(f"Results saved in directory: {subfolder}")
 
+    # Calculate training duration
+    end_time = datetime.now()
+    training_duration = end_time - start_time
+    hours = training_duration.seconds // 3600
+    minutes = (training_duration.seconds % 3600) // 60
+    seconds = training_duration.seconds % 60
+    
     # Plot training progress with both raw scores and moving average
     plt.figure(figsize=(12, 6))
     
@@ -444,19 +463,35 @@ def train(
     # Add horizontal line for overall average
     overall_avg = np.mean(stats["episode_scores"])
     plt.axhline(y=overall_avg, color='green', linestyle='--', 
-                label=f'Overall Average: {overall_avg:.2f}')
+                label=f'Overall Average Score: {overall_avg:.2f}')
+    
+    # Mark highest score episode with a red star
+    max_score_idx = np.argmax(stats["episode_scores"])
+    max_score = stats["episode_scores"][max_score_idx]
+    plt.plot(max_score_idx, max_score, 'r*', markersize=15,
+             label=f'Highest Score: {max_score:.2f} (Episode {max_score_idx+1})')
     
     plt.xlabel('Episode')
-    plt.ylabel('Avg Score')
-    plt.title('Training Progress Statistics')
+    plt.ylabel('Score/Avg Score')
+    plt.title(f'Training Progress Statistics (Duration: {hours:02d}:{minutes:02d}:{seconds:02d})')
     plt.legend()
     plt.grid(True)
+    
     # Save the plot in the same subfolder as checkpoints
     plot_path = os.path.join(subfolder, f'training_progress_{timestamp}.png')
     plt.savefig(plot_path)
     plt.close()
     print(f"Training progress plot saved to: {plot_path}")
-
+    
+    # Display the final board state of the best score
+    if stats["best_board"] is not None:
+        print("\nFinal Board State of Highest Score Episode:")
+        print("Score:", stats["best_score"])
+        print("Board:")
+        for row in stats["best_board"]:
+            print("\t".join(f"{int(val):4d}" if val != 0 else "   ." for val in row))
+        print()
+    
     return stats
 
 def load_config(config_file: str) -> Dict[str, Any]:
