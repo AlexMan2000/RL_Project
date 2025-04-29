@@ -1,7 +1,7 @@
 {
     "merge_bonus": false,
-    "fullness_penalty": true,
+    "fullness_penalty": false,
     "smoothness_bonus": false,
-    "corner_bonus": true, 
-    "no_progress_penalty": true
+    "corner_bonus": false, 
+    "no_progress_penalty": false
 }
