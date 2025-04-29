@@ -107,7 +107,15 @@ class ActorCriticAgent:
         # Convert everything to tensors
         state_tensor = self.preprocess_state(state)
         next_state_tensor = self.preprocess_state(next_state)
-        action_tensor = torch.LongTensor([action]).to(self.device)
+        # Validate action(s) are within [0, 1, 2, 3]
+        if isinstance(action, (list, np.ndarray, torch.Tensor)):
+            action_arr = np.array(action)
+            if np.any((action_arr < 0) | (action_arr > 3)):
+                raise ValueError(f"Invalid action(s) detected: {action_arr}")
+        else:
+            if not (0 <= action <= 3):
+                raise ValueError(f"Invalid action detected: {action}")
+        action_tensor = torch.as_tensor(action, dtype=torch.long, device=self.device).flatten()
         reward_tensor = torch.FloatTensor([reward]).to(self.device)
         done_tensor = torch.FloatTensor([done]).to(self.device)
 
@@ -135,6 +143,7 @@ class ActorCriticAgent:
         
         # Compute actor loss with entropy regularization
         actor_loss = -(log_prob * advantage.detach() + 0.01 * entropy)
+        actor_loss = actor_loss.mean()  # Ensure scalar for backward
         
         self.actor_optimizer.zero_grad()
         actor_loss.backward()

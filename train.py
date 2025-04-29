@@ -357,21 +357,39 @@ def train(
 
         # for step in range(rl_config.max_steps):
         step = 0
-        while not done:
-            if render:
-                env.render()
-            
-            action = agent.select_action(state)
-            next_state, step_score, step_reward, done, _, _ = env.step(action)
-            agent.update(state, action, step_reward, next_state, done)
-            
-            state = next_state
-            episode_score += step_score
-            episode_reward += step_reward
-            
-            if done:
-                break
-            step += 1
+        if rl_config.max_steps is not None:
+            while step < rl_config.max_steps:
+                if render:
+                    env.render()
+                
+                action = agent.select_action(state)
+                next_state, step_score, step_reward, done, _, _ = env.step(action)
+                agent.update(state, action, step_reward, next_state, done)
+                
+                state = next_state
+                episode_score += step_score
+                episode_reward += step_reward
+                
+                if done:
+                    break
+                step += 1
+        else:    
+            print("Training until game over")
+            while not done:
+                if render:
+                    env.render()
+                
+                action = agent.select_action(state)
+                next_state, step_score, step_reward, done, _, _ = env.step(action)
+                agent.update(state, action, step_reward, next_state, done)
+                
+                state = next_state
+                episode_score += step_score
+                episode_reward += step_reward
+                
+                if done:
+                    break
+                step += 1
 
         
         stats["episode_rewards"].append(episode_reward)
